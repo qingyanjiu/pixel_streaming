@@ -1,0 +1,22 @@
+services:
+  coturn:
+    image: coturn/coturn:latest
+    container_name: pixel_streaming_turn
+    platform: linux/amd64
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+    restart: unless-stopped
+    network_mode: host
+
+  pixel-streaming:
+    build: .
+    platform: linux/amd64
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./app:/app/app
+      - ./web:/app/web
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    network_mode: host
