@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Stream</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            background: #16213e;
+            padding: 16px 24px;
+            border-bottom: 1px solid #0f3460;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        header h1 {
+            font-size: 20px;
+            color: #e94560;
+        }
+        .status {
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status.disconnected { background: #e94560; }
+        .status.connecting { background: #f39c12; }
+        .status.connected { background: #27ae60; }
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            gap: 16px;
+        }
+        .controls {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        input[type="text"] {
+            flex: 1;
+            min-width: 300px;
+            padding: 10px 16px;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            background: #16213e;
+            color: #eee;
+            font-size: 14px;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            background: #e94560;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover { background: #c0392b; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        .viewport {
+            flex: 1;
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: none;
+        }
+        #placeholder {
+            text-align: center;
+            color: #888;
+        }
+        #placeholder .icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+        .message {
+            position: absolute;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 16px;
+            background: rgba(0,0,0,0.8);
+            border-radius: 8px;
+            font-size: 13px;
+        }
+        .message.error { color: #e74c3c; }
+        .message.success { color: #27ae60; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Browser Stream</h1>
+        <span class="status disconnected" id="status">Disconnected</span>
+        <button id="connectBtn">Connect</button>
+    </header>
+    <main>
+        <div class="controls">
+            <input type="text" id="urlInput" placeholder="Enter URL to navigate..." value="https://example.com">
+            <button id="navigateBtn" disabled>Navigate</button>
+            <button id="screenshotBtn" disabled>Screenshot</button>
+        </div>
+        <div class="viewport">
+            <video id="video" autoplay playsinline></video>
+            <div id="placeholder">
+                <div class="icon">🖥️</div>
+                <div>Click Connect to start streaming</div>
+            </div>
+            <div class="message" id="message" style="display:none"></div>
+        </div>
+    </main>
+
+    <script>
+        const sessionId = 'session-' + Math.random().toString(36).substr(2, 9);
+        const statusEl = document.getElementById('status');
+        const connectBtn = document.getElementById('connectBtn');
+        const navigateBtn = document.getElementById('navigateBtn');
+        const screenshotBtn = document.getElementById('screenshotBtn');
+        const urlInput = document.getElementById('urlInput');
+        const video = document.getElementById('video');
+        const placeholder = document.getElementById('placeholder');
+        const messageEl = document.getElementById('message');
+
+        let ws = null;
+        let pc = null;
+        let connected = false;
+
+        function showMessage(text, type = 'info') {
+            messageEl.textContent = text;
+            messageEl.className = 'message ' + type;
+            messageEl.style.display = 'block';
+            setTimeout(() => { messageEl.style.display = 'none'; }, 3000);
+        }
+
+        function setStatus(state, text) {
+            statusEl.className = 'status ' + state;
+            statusEl.textContent = text;
+        }
+
+        async function connect() {
+            if (connected) return;
+
+            setStatus('connecting', 'Connecting...');
+            connectBtn.disabled = true;
+
+            console.log('Starting connect...');
+            try {
+                pc = new RTCPeerConnection({
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                });
+                console.log('RTCPeerConnection created');
+
+                pc.ontrack = (event) => {
+                    console.log('Track received:', event.track, 'kind:', event.track.kind);
+                    if (event.track.kind === 'video') {
+                        const stream = new MediaStream();
+                        stream.addTrack(event.track);
+                        video.srcObject = stream;
+                    }
+                };
+
+                pc.onerror = (err) => {
+                    console.error('RTCPeerConnection error:', err);
+                };
+
+                pc.onicecandidate = (event) => {
+                    if (event.candidate && ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'candidate',
+                            candidate: event.candidate.candidate,
+                            sdpMid: event.candidate.sdpMid,
+                            sdpMLineIndex: event.candidate.sdpMLineIndex
+                        }));
+                    }
+                };
+
+                pc.onconnectionstatechange = () => {
+                    console.log('RTCPeerConnection state change:', pc.connectionState);
+                    if (pc.connectionState === 'connected') {
+                        connected = true;
+                        setStatus('connected', 'Connected');
+                        navigateBtn.disabled = false;
+                        screenshotBtn.disabled = false;
+                        placeholder.style.display = 'none';
+                        video.style.display = 'block';
+                        connectBtn.textContent = 'Disconnect';
+                        connectBtn.disabled = false;
+                    } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+                        disconnect();
+                    }
+                };
+
+                const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                ws = new WebSocket(`${wsProtocol}//${location.host}/ws?session=${sessionId}`);
+
+                ws.onopen = () => {
+                    console.log('WebSocket connected, sending start...');
+                    ws.send(JSON.stringify({
+                        type: 'start',
+                        url: urlInput.value || 'https://example.com'
+                    }));
+                    
+                    pc.createOffer().then(offer => {
+                        console.log('Offer created, setting local...');
+                        return pc.setLocalDescription(offer);
+                    }).then(() => {
+                        console.log('Local description set, sending offer...');
+                        ws.send(JSON.stringify({
+                            type: 'offer',
+                            sdp: pc.localDescription.sdp
+                        }));
+                        console.log('Offer sent');
+                    }).catch(err => {
+                        console.error('Error creating offer:', err);
+                    });
+                };
+
+                ws.onmessage = (event) => {
+                    console.log('ws.onmessage called');
+                    const msg = JSON.parse(event.data);
+                    console.log('WS message:', msg.type);
+
+                    if (msg.type === 'answer') {
+                        console.log('Received answer, setting remote...');
+                        pc.setRemoteDescription(new RTCSessionDescription({
+                            type: 'answer',
+                            sdp: msg.sdp
+                        })).then(() => {
+                            console.log('Answer set successfully');
+                        }).catch(err => {
+                            console.error('Error setting answer:', err);
+                        });
+                    } else if (msg.type === 'offer') {
+                        console.log('Adding candidate...');
+                        pc.addIceCandidate(new RTCIceCandidate({
+                            candidate: msg.candidate,
+                            sdpMid: msg.sdpMid,
+                            sdpMLineIndex: msg.sdpMLineIndex
+                        })).then(() => {
+                            console.log('Candidate added');
+                        }).catch(err => {
+                            console.error('Error adding candidate:', err);
+                        });
+                    }
+                };
+
+                ws.onerror = (err) => {
+                    console.error('WebSocket error:', err);
+                    showMessage('Connection error', 'error');
+                    disconnect();
+                };
+
+                ws.onclose = (e) => {
+                    console.log('WebSocket closed, code:', e.code, 'reason:', e.reason);
+                    disconnect();
+                };
+
+            } catch (err) {
+                console.error('Connection error:', err);
+                showMessage(err.message, 'error');
+                setStatus('disconnected', 'Disconnected');
+                connectBtn.disabled = false;
+            }
+        }
+
+        function disconnect() {
+            connected = false;
+            if (ws) { ws.close(); ws = null; }
+            if (pc) { pc.close(); pc = null; }
+
+            setStatus('disconnected', 'Disconnected');
+            connectBtn.textContent = 'Connect';
+            connectBtn.disabled = false;
+            navigateBtn.disabled = true;
+            screenshotBtn.disabled = true;
+            video.style.display = 'none';
+            placeholder.style.display = 'flex';
+        }
+
+        connectBtn.addEventListener('click', () => {
+            if (connected) {
+                disconnect();
+            } else {
+                connect();
+            }
+        });
+
+        navigateBtn.addEventListener('click', async () => {
+            const url = urlInput.value;
+            if (!url) return;
+
+            try {
+                const res = await fetch(`/browse?session=${sessionId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'navigate', url })
+                });
+                if (res.ok) {
+                    showMessage('Navigating...', 'success');
+                }
+            } catch (err) {
+                showMessage(err.message, 'error');
+            }
+        });
+
+        screenshotBtn.addEventListener('click', async () => {
+            try {
+                const res = await fetch(`/browse?session=${sessionId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'create' })
+                });
+                if (res.ok) {
+                    showMessage('Screenshot session created', 'success');
+                }
+            } catch (err) {
+                showMessage(err.message, 'error');
+            }
+        });
+    </script>
+</body>
+</html>
