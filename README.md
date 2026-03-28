@@ -330,36 +330,50 @@ browser-stream/
 └── run.py
 ```
 
-## Docker
+## Docker 部署
 
-### Linux 服务器（推荐生产环境使用）
+Linux 服务器推荐使用 Docker 部署（使用 host 网络，WebRTC 可正常工作）。
 
-Linux 下 Docker 网络与宿主机直接打通，WebRTC 可正常工作。
+### 快速部署
 
 ```bash
-# 安装 Docker（如需要）
-curl -fsSL https://get.docker.com | sh
+# 克隆项目
+git clone <repo-url>
+cd pixel-streaming
 
-# 构建并运行
-docker compose up --build -d
+# 配置 TURN（如需要）
+cp .env.example .env
+nano .env  # 编辑 TURN_SERVER 等配置
+
+# 启动服务
+docker compose up -d
 
 # 查看日志
 docker compose logs -f
 
-# 停止
+# 停止服务
 docker compose down
 ```
 
-**Docker 配置说明**：
-- 默认使用 amd64 架构
-- 服务端口：8080
-- 包含 coturn TURN 服务器（端口 3478）
-- TURN 用户名：`turnuser`，密码：`turnpassword`
+### 环境变量配置
 
-### macOS/Windows（本地开发）
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `TURN_SERVER` | TURN 服务器 IP | （空） |
+| `TURN_PORT` | TURN 端口 | `8888` |
+| `TURN_USER` | TURN 用户名（可选） | （空） |
+| `TURN_PASSWORD` | TURN 密码（可选） | （空） |
 
-Docker Desktop 在 macOS 和 Windows 上有网络隔离限制。本地 WebRTC 测试建议**直接在宿主机运行**。
+### 云服务器 + UE5
 
-如必须使用 Docker，建议使用 Linux VM 或云服务器。
+外网部署时使用 UE5 自带的 TURN 服务：
 
-**注意**：在 macOS 或 Windows 上使用 Docker Desktop 时，WebRTC ICE 连接可能因 Docker 虚拟网络而失败。本地开发请使用直接安装方式。
+```bash
+# .env 配置
+TURN_SERVER=你的UE5服务器IP
+TURN_PORT=8888
+```
+
+### macOS/Windows 本地开发
+
+Docker Desktop 的虚拟网络会导致 WebRTC ICE 连接失败。本地开发请**直接在宿主机运行 Python**。
