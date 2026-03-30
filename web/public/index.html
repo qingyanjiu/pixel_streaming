@@ -182,11 +182,10 @@
                 // 格式：{ urls: 'turn:<服务器IP>:3478?transport=udp' }
                 const iceServers = [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'turn:107.173.83.242:19303?transport=udp', username: 'PixelStreamingUser', credential: 'AnotherTURNintheroad' }
+                    { urls: 'turn:107.173.83.242:19303?transport=udp', username: 'admin', credential: 'hxkj2026' }
                 ];
                 
                 pc = new RTCPeerConnection({
-                        iceTransportPolicy: 'relay',
                         iceServers 
                     }
                 );
@@ -274,17 +273,19 @@
                         }).catch(err => {
                             console.error('Error setting answer:', err);
                         });
-                    } else if (msg.type === 'offer') {
-                        console.log('Adding candidate...');
-                        pc.addIceCandidate(new RTCIceCandidate({
-                            candidate: msg.candidate,
-                            sdpMid: msg.sdpMid,
-                            sdpMLineIndex: msg.sdpMLineIndex
-                        })).then(() => {
-                            console.log('Candidate added');
-                        }).catch(err => {
-                            console.error('Error adding candidate:', err);
-                        });
+                    } else if (msg.type === 'candidate') {
+                        console.log('Received candidate:', msg.candidate);
+                        if (msg.candidate) {
+                            pc.addIceCandidate(new RTCIceCandidate({
+                                candidate: msg.candidate,
+                                sdpMid: msg.sdpMid,
+                                sdpMLineIndex: msg.sdpMLineIndex
+                            })).then(() => {
+                                console.log('Candidate added');
+                            }).catch(err => {
+                                console.error('Error adding candidate:', err);
+                            });
+                        }
                     }
                 };
 
