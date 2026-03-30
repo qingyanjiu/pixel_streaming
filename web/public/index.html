@@ -185,7 +185,11 @@
                     { urls: 'turn:107.173.83.242:19303?transport=udp', username: 'PixelStreamingUser', credential: 'AnotherTURNintheroad' }
                 ];
                 
-                pc = new RTCPeerConnection({ iceServers });
+                pc = new RTCPeerConnection({
+                        iceTransportPolicy: 'relay',
+                        iceServers 
+                    }
+                );
                 console.log('RTCPeerConnection created');
 
                 pc.ontrack = (event) => {
