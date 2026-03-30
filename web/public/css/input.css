@@ -1,0 +1,69 @@
+.control-cursor {
+    position: absolute;
+    pointer-events: none;
+    z-index: 1000;
+    transform: translate(-50%, -50%);
+    transition: opacity 0.15s ease;
+}
+
+.cursor-circle {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(233, 69, 96, 0.8);
+    border-radius: 50%;
+    background: rgba(233, 69, 96, 0.1);
+    box-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
+}
+
+.cursor-crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 8px;
+    height: 8px;
+}
+
+.cursor-crosshair::before,
+.cursor-crosshair::after {
+    content: '';
+    position: absolute;
+    background: rgba(233, 69, 96, 0.9);
+}
+
+.cursor-crosshair::before {
+    width: 2px;
+    height: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.cursor-crosshair::after {
+    width: 100%;
+    height: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.control-mode-indicator {
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 500;
+    background: #27ae60;
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.control-mode-indicator:hover {
+    background: #219a52;
+}
+
+.control-mode-indicator.active {
+    background: #e94560;
+}
+
+.control-mode-indicator.active:hover {
+    background: #c0392b;
+}

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Browser Stream</title>
+    <link rel="stylesheet" href="/css/input.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -118,6 +119,7 @@
         <h1>Browser Stream</h1>
         <span class="status disconnected" id="status">Disconnected</span>
         <button id="connectBtn">Connect</button>
+        <span class="control-mode-indicator" id="controlBtn" title="Toggle control mode">Control Mode</span>
     </header>
     <main>
         <div class="controls">
@@ -132,6 +134,10 @@
                 <div>Click Connect to start streaming</div>
             </div>
             <div class="message" id="message" style="display:none"></div>
+            <div class="control-cursor" id="cursor">
+                <div class="cursor-circle"></div>
+                <div class="cursor-crosshair"></div>
+            </div>
         </div>
     </main>
 
@@ -176,8 +182,7 @@
                 // 格式：{ urls: 'turn:<服务器IP>:3478?transport=udp' }
                 const iceServers = [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    // 如需 TURN，添加类似以下配置：
-                    // { urls: 'turn:你的服务器IP:8888?transport=udp' }
+                    { urls: 'turn:107.173.83.242:19303?transport=udp', username: 'PixelStreamingUser', credential: 'AnotherTURNintheroad' }
                 ];
                 
                 pc = new RTCPeerConnection({ iceServers });
@@ -351,6 +356,25 @@
             } catch (err) {
                 showMessage(err.message, 'error');
             }
+        });
+    </script>
+    <script src="/js/input-handler.js"></script>
+    <script>
+        const inputHandler = new InputHandler(sessionId);
+        inputHandler.init('#viewport', '#cursor');
+
+        const controlBtn = document.getElementById('controlBtn');
+        let controlEnabled = false;
+
+        controlBtn.addEventListener('click', () => {
+            if (!connected) {
+                showMessage('Please connect first', 'error');
+                return;
+            }
+            controlEnabled = inputHandler.toggle();
+            controlBtn.classList.toggle('active', controlEnabled);
+            controlBtn.textContent = controlEnabled ? 'Exit Control' : 'Control Mode';
+            showMessage(controlEnabled ? 'Control mode enabled' : 'Control mode disabled', 'success');
         });
     </script>
 </body>

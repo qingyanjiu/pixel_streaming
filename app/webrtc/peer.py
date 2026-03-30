@@ -42,6 +42,7 @@ class BrowserVideoTrack(VideoStreamTrack):
     async def recv(self):
         pts, time_base = await self.next_timestamp()
 
+        logger.warning(f"recv() called, frame_count={self.frame_count}")
         frame_data = await self.browser_session.capture_frame()
 
         if frame_data is None:
@@ -120,6 +121,7 @@ class WebRTCPeer:
         answer = await self.pc.createAnswer()
         await self.pc.setLocalDescription(answer)
 
+        logger.info(f"Answer SDP:\n{answer.sdp[:500]}...")
         await self.ws.send_json({"type": "answer", "sdp": answer.sdp})
 
     async def handle_ice_candidate(self, data: dict):
