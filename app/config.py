@@ -16,7 +16,7 @@ class Config:
     PORT = int(os.getenv("PORT", "8080"))
 
     ICE_SERVERS = [
-        {"urls": "stun:stun.l.google.com:19302"},
+        {"urls": ["stun:stun.l.google.com:19302"]},
     ]
 
     TURN_SERVER = os.getenv("TURN_SERVER", "")
@@ -32,11 +32,11 @@ class Config:
             if cls.TURN_USER:
                 servers.append(
                     {
-                        "urls": turn_url,
+                        "urls": [turn_url],
                         "username": cls.TURN_USER,
                         "credential": cls.TURN_PASSWORD,
                     }
                 )
             else:
-                servers.append({"urls": turn_url})
+                servers.append({"urls": [turn_url]})
         return servers

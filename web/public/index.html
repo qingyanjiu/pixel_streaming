@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Browser Stream</title>
-    <link rel="stylesheet" href="/css/input.css">
+    <link rel="stylesheet" href="/css/input.css" />
+
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #1a1a2e;
@@ -15,6 +17,7 @@
             display: flex;
             flex-direction: column;
         }
+
         header {
             background: #16213e;
             padding: 16px 24px;
@@ -23,19 +26,23 @@
             align-items: center;
             gap: 16px;
         }
+
         header h1 {
             font-size: 20px;
             color: #e94560;
         }
+
         .status {
             padding: 4px 12px;
             border-radius: 16px;
             font-size: 12px;
             font-weight: 500;
         }
+
         .status.disconnected { background: #e94560; }
         .status.connecting { background: #f39c12; }
         .status.connected { background: #27ae60; }
+
         main {
             flex: 1;
             display: flex;
@@ -43,11 +50,13 @@
             padding: 24px;
             gap: 16px;
         }
+
         .controls {
             display: flex;
             gap: 12px;
             flex-wrap: wrap;
         }
+
         input[type="text"] {
             flex: 1;
             min-width: 300px;
@@ -58,10 +67,12 @@
             color: #eee;
             font-size: 14px;
         }
+
         input[type="text"]:focus {
             outline: none;
             border-color: #e94560;
         }
+
         button {
             padding: 10px 20px;
             border: none;
@@ -73,8 +84,10 @@
             cursor: pointer;
             transition: background 0.2s;
         }
+
         button:hover { background: #c0392b; }
         button:disabled { background: #555; cursor: not-allowed; }
+
         .viewport {
             flex: 1;
             background: #16213e;
@@ -85,33 +98,42 @@
             align-items: center;
             justify-content: center;
             position: relative;
+            min-height: 480px;
         }
+
         #video {
             width: 100%;
             height: 100%;
             object-fit: contain;
             display: none;
+            background: #000;
         }
+
         #placeholder {
             text-align: center;
             color: #888;
         }
+
         #placeholder .icon {
             font-size: 64px;
             margin-bottom: 16px;
         }
+
         .message {
             position: absolute;
             bottom: 16px;
             left: 50%;
             transform: translateX(-50%);
             padding: 8px 16px;
-            background: rgba(0,0,0,0.8);
+            background: rgba(0, 0, 0, 0.8);
             border-radius: 8px;
             font-size: 13px;
+            z-index: 20;
         }
+
         .message.error { color: #e74c3c; }
         .message.success { color: #27ae60; }
+        .message.info { color: #f1c40f; }
     </style>
 </head>
 <body>
@@ -121,19 +143,30 @@
         <button id="connectBtn">Connect</button>
         <span class="control-mode-indicator" id="controlBtn" title="Toggle control mode">Control Mode</span>
     </header>
+
     <main>
         <div class="controls">
-            <input type="text" id="urlInput" placeholder="Enter URL to navigate..." value="https://example.com">
+            <input
+                type="text"
+                id="urlInput"
+                placeholder="Enter URL to navigate..."
+                value="https://example.com"
+            />
             <button id="navigateBtn" disabled>Navigate</button>
             <button id="screenshotBtn" disabled>Screenshot</button>
         </div>
-        <div class="viewport">
-            <video id="video" autoplay playsinline></video>
+
+        <!-- 注意：这里补了 id="viewport"，否则你下面 InputHandler.init('#viewport', ...) 会找不到元素 -->
+        <div class="viewport" id="viewport">
+            <video id="video" autoplay playsinline muted></video>
+
             <div id="placeholder">
                 <div class="icon">🖥️</div>
                 <div>Click Connect to start streaming</div>
             </div>
+
             <div class="message" id="message" style="display:none"></div>
+
             <div class="control-cursor" id="cursor">
                 <div class="cursor-circle"></div>
                 <div class="cursor-crosshair"></div>
@@ -142,7 +175,11 @@
     </main>
 
     <script>
+        // =========================
+        // 基础 DOM / 全局状态
+        // =========================
         const sessionId = 'session-' + Math.random().toString(36).substr(2, 9);
+
         const statusEl = document.getElementById('status');
         const connectBtn = document.getElementById('connectBtn');
         const navigateBtn = document.getElementById('navigateBtn');
@@ -152,15 +189,22 @@
         const placeholder = document.getElementById('placeholder');
         const messageEl = document.getElementById('message');
 
-        let ws = null;
-        let pc = null;
-        let connected = false;
+        let ws = null;                 // WebSocket 信令通道
+        let pc = null;                 // RTCPeerConnection
+        let connected = false;         // UI 层“已连接”标记
+        let connecting = false;        // 防止重复点击 Connect
 
+        // =========================
+        // UI 工具函数
+        // =========================
         function showMessage(text, type = 'info') {
             messageEl.textContent = text;
             messageEl.className = 'message ' + type;
             messageEl.style.display = 'block';
-            setTimeout(() => { messageEl.style.display = 'none'; }, 3000);
+
+            setTimeout(() => {
+                messageEl.style.display = 'none';
+            }, 3000);
         }
 
         function setStatus(state, text) {
@@ -168,203 +212,423 @@
             statusEl.textContent = text;
         }
 
-        async function connect() {
-            if (connected) return;
+        function setConnectedUI() {
+            connected = true;
+            connecting = false;
 
-            setStatus('connecting', 'Connecting...');
-            connectBtn.disabled = true;
+            setStatus('connected', 'Connected');
+            connectBtn.textContent = 'Disconnect';
+            connectBtn.disabled = false;
 
-            console.log('Starting connect...');
-            try {
-                // ICE 配置
-                // 内网环境：只需要 STUN
-                // 外网部署：需要添加 TURN 服务器
-                // 格式：{ urls: 'turn:<服务器IP>:3478?transport=udp' }
-                const iceServers = [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'turn:107.173.83.242:19303?transport=udp', username: 'admin', credential: 'hxkj2026' }
-                ];
-                
-                pc = new RTCPeerConnection({
-                        iceServers 
-                    }
-                );
-                console.log('RTCPeerConnection created');
+            navigateBtn.disabled = false;
+            screenshotBtn.disabled = false;
 
-                pc.ontrack = (event) => {
-                    console.log('Track received:', event.track, 'kind:', event.track.kind);
-                    if (event.track.kind === 'video') {
-                        const stream = new MediaStream();
-                        stream.addTrack(event.track);
-                        video.srcObject = stream;
-                    }
-                };
-
-                pc.onerror = (err) => {
-                    console.error('RTCPeerConnection error:', err);
-                };
-
-                pc.onicecandidate = (event) => {
-                    if (event.candidate && ws && ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({
-                            type: 'candidate',
-                            candidate: event.candidate.candidate,
-                            sdpMid: event.candidate.sdpMid,
-                            sdpMLineIndex: event.candidate.sdpMLineIndex
-                        }));
-                    }
-                };
-
-                pc.onconnectionstatechange = () => {
-                    console.log('RTCPeerConnection state change:', pc.connectionState);
-                    if (pc.connectionState === 'connected') {
-                        connected = true;
-                        setStatus('connected', 'Connected');
-                        navigateBtn.disabled = false;
-                        screenshotBtn.disabled = false;
-                        placeholder.style.display = 'none';
-                        video.style.display = 'block';
-                        connectBtn.textContent = 'Disconnect';
-                        connectBtn.disabled = false;
-                    } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-                        disconnect();
-                    }
-                };
-
-                pc.addTransceiver('video', { direction: 'recvonly' });
-
-                const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-                ws = new WebSocket(`${wsProtocol}//${location.host}/ws?session=${sessionId}`);
-
-                ws.onopen = () => {
-                    console.log('WebSocket connected, sending start...');
-                    ws.send(JSON.stringify({
-                        type: 'start',
-                        url: urlInput.value || 'https://example.com'
-                    }));
-                    
-                    pc.createOffer().then(offer => {
-                        console.log('Offer created, setting local...');
-                        return pc.setLocalDescription(offer);
-                    }).then(() => {
-                        console.log('Local description set, sending offer...');
-                        ws.send(JSON.stringify({
-                            type: 'offer',
-                            sdp: pc.localDescription.sdp
-                        }));
-                        console.log('Offer sent');
-                    }).catch(err => {
-                        console.error('Error creating offer:', err);
-                    });
-                };
-
-                ws.onmessage = (event) => {
-                    console.log('ws.onmessage called');
-                    const msg = JSON.parse(event.data);
-                    console.log('WS message:', msg.type);
-
-                    if (msg.type === 'answer') {
-                        console.log('Received answer, setting remote...');
-                        pc.setRemoteDescription(new RTCSessionDescription({
-                            type: 'answer',
-                            sdp: msg.sdp
-                        })).then(() => {
-                            console.log('Answer set successfully');
-                        }).catch(err => {
-                            console.error('Error setting answer:', err);
-                        });
-                    } else if (msg.type === 'candidate') {
-                        console.log('Received candidate:', msg.candidate);
-                        if (msg.candidate) {
-                            pc.addIceCandidate(new RTCIceCandidate({
-                                candidate: msg.candidate,
-                                sdpMid: msg.sdpMid,
-                                sdpMLineIndex: msg.sdpMLineIndex
-                            })).then(() => {
-                                console.log('Candidate added');
-                            }).catch(err => {
-                                console.error('Error adding candidate:', err);
-                            });
-                        }
-                    }
-                };
-
-                ws.onerror = (err) => {
-                    console.error('WebSocket error:', err);
-                    showMessage('Connection error', 'error');
-                    disconnect();
-                };
-
-                ws.onclose = (e) => {
-                    console.log('WebSocket closed, code:', e.code, 'reason:', e.reason);
-                    disconnect();
-                };
-
-            } catch (err) {
-                console.error('Connection error:', err);
-                showMessage(err.message, 'error');
-                setStatus('disconnected', 'Disconnected');
-                connectBtn.disabled = false;
-            }
+            placeholder.style.display = 'none';
+            video.style.display = 'block';
         }
 
-        function disconnect() {
+        function setDisconnectedUI() {
             connected = false;
-            if (ws) { ws.close(); ws = null; }
-            if (pc) { pc.close(); pc = null; }
+            connecting = false;
 
             setStatus('disconnected', 'Disconnected');
             connectBtn.textContent = 'Connect';
             connectBtn.disabled = false;
+
             navigateBtn.disabled = true;
             screenshotBtn.disabled = true;
+
             video.style.display = 'none';
+            video.srcObject = null;
             placeholder.style.display = 'flex';
         }
 
+        // =========================
+        // 等待 ICE 收集完成
+        // 这样可以把“完整 offer（带 candidate）”一次性发给后端
+        // =========================
+        async function waitForIceGatheringComplete(pc) {
+            if (pc.iceGatheringState === 'complete') {
+                return;
+            }
+
+            await new Promise((resolve) => {
+                function checkState() {
+                    console.log('[ICE] gathering state:', pc.iceGatheringState);
+
+                    if (pc.iceGatheringState === 'complete') {
+                        pc.removeEventListener('icegatheringstatechange', checkState);
+                        resolve();
+                    }
+                }
+
+                pc.addEventListener('icegatheringstatechange', checkState);
+            });
+        }
+
+        // =========================
+        // 创建并配置 RTCPeerConnection
+        // =========================
+        function createPeerConnection() {
+            // TURN 配置：
+            // - 外网环境建议保留 UDP + TCP
+            // - 你已经验证过 TURN 是通的
+            const iceServers = [
+                {
+                    urls: [
+                        'turn:107.173.83.242:19303?transport=udp',
+                        'turn:107.173.83.242:19303?transport=tcp'
+                    ],
+                    username: 'admin',
+                    credential: 'hxkj2026'
+                }
+            ];
+
+            const peer = new RTCPeerConnection({ iceServers });
+
+            console.log('[PC] RTCPeerConnection created');
+
+            // ===== 收到远端媒体轨道 =====
+            peer.ontrack = (event) => {
+                console.log('[PC] Track received:', event.track.kind, event);
+
+                if (event.track.kind === 'video') {
+                    const stream = new MediaStream();
+                    stream.addTrack(event.track);
+
+                    video.srcObject = stream;
+
+                    // 某些浏览器在 srcObject 设置后，最好主动 play()
+                    video.onloadedmetadata = async () => {
+                        try {
+                            await video.play();
+                            console.log('[VIDEO] Playing');
+                        } catch (e) {
+                            console.error('[VIDEO] play() failed:', e);
+                        }
+                    };
+                }
+            };
+
+            // ===== 浏览器本地 ICE candidate 收集 =====
+            peer.onicecandidate = (event) => {
+                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                    return;
+                }
+
+                if (event.candidate) {
+                    console.log('[ICE] Local candidate:', event.candidate.candidate);
+
+                    ws.send(JSON.stringify({
+                        type: 'candidate',
+                        candidate: event.candidate.candidate,
+                        sdpMid: event.candidate.sdpMid,
+                        sdpMLineIndex: event.candidate.sdpMLineIndex
+                    }));
+                } else {
+                    // candidate = null 表示浏览器本地 candidate 收集结束
+                    console.log('[ICE] All local candidates sent');
+
+                    ws.send(JSON.stringify({
+                        type: 'candidate',
+                        candidate: null
+                    }));
+                }
+            };
+
+            // ===== 连接状态日志（非常重要）=====
+            peer.onconnectionstatechange = () => {
+                console.log('[PC] connectionState:', peer.connectionState);
+
+                if (peer.connectionState === 'connected') {
+                    setConnectedUI();
+                    showMessage('WebRTC connected', 'success');
+                } else if (
+                    peer.connectionState === 'failed' ||
+                    peer.connectionState === 'disconnected' ||
+                    peer.connectionState === 'closed'
+                ) {
+                    // 避免在手动 disconnect 过程中重复调用导致混乱
+                    if (connected || connecting) {
+                        showMessage(`Connection ${peer.connectionState}`, 'error');
+                        disconnect(false);
+                    }
+                }
+            };
+
+            peer.oniceconnectionstatechange = () => {
+                console.log('[ICE] iceConnectionState:', peer.iceConnectionState);
+            };
+
+            peer.onicegatheringstatechange = () => {
+                console.log('[ICE] iceGatheringState:', peer.iceGatheringState);
+            };
+
+            peer.onsignalingstatechange = () => {
+                console.log('[PC] signalingState:', peer.signalingState);
+            };
+
+            peer.onerror = (err) => {
+                console.error('[PC] RTCPeerConnection error:', err);
+            };
+
+            // 前端只接收视频，不发送视频
+            peer.addTransceiver('video', { direction: 'recvonly' });
+
+            return peer;
+        }
+
+        // =========================
+        // 建立连接
+        // 流程：
+        // 1. 建立 WebSocket 信令
+        // 2. 创建 RTCPeerConnection
+        // 3. 发 start 给后端，让后端准备 browser_session
+        // 4. 创建 offer
+        // 5. 等本地 ICE 收集完成
+        // 6. 把完整 offer 发给后端
+        // 7. 收到 answer 后 setRemoteDescription
+        // =========================
+        async function connect() {
+            if (connected || connecting) {
+                return;
+            }
+
+            connecting = true;
+            setStatus('connecting', 'Connecting...');
+            connectBtn.disabled = true;
+
+            console.log('[APP] Starting connect...');
+
+            try {
+                // 先创建 PeerConnection
+                pc = createPeerConnection();
+
+                // 根据页面协议自动选择 ws / wss
+                const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                ws = new WebSocket(`${wsProtocol}//${location.host}/ws?session=${sessionId}`);
+
+                ws.onopen = async () => {
+                    console.log('[WS] Connected');
+
+                    // 通知后端先准备浏览器会话 / stream
+                    ws.send(JSON.stringify({
+                        type: 'start',
+                        url: urlInput.value || 'https://example.com'
+                    }));
+
+                    try {
+                        // 1) 创建 offer
+                        const offer = await pc.createOffer();
+
+                        // 2) 设置本地描述
+                        await pc.setLocalDescription(offer);
+
+                        // 3) 等待本地 ICE 收集完成（非常关键）
+                        await waitForIceGatheringComplete(pc);
+
+                        // 4) 发完整 offer（包含更完整的 candidate）
+                        const fullOfferSdp = pc.localDescription.sdp;
+
+                        console.log('[WS] Sending full offer, SDP length:', fullOfferSdp.length);
+
+                        ws.send(JSON.stringify({
+                            type: 'offer',
+                            sdp: fullOfferSdp
+                        }));
+                    } catch (err) {
+                        console.error('[APP] Error creating/sending offer:', err);
+                        showMessage('Failed to create offer', 'error');
+                        disconnect(false);
+                    }
+                };
+
+                ws.onmessage = async (event) => {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        console.log('[WS] Message:', msg.type);
+
+                        if (!pc) {
+                            console.warn('[WS] Message received but pc is null');
+                            return;
+                        }
+
+                        // ===== 收到后端 answer =====
+                        if (msg.type === 'answer') {
+                            console.log('[WS] Received answer, SDP length:', msg.sdp?.length || 0);
+
+                            await pc.setRemoteDescription(new RTCSessionDescription({
+                                type: 'answer',
+                                sdp: msg.sdp
+                            }));
+
+                            console.log('[PC] Remote answer set successfully');
+                        }
+
+                        // ===== 如果你未来开启后端 trickle ICE，这里也兼容 =====
+                        else if (msg.type === 'candidate') {
+                            console.log('[WS] Received remote candidate:', msg.candidate);
+
+                            if (msg.candidate) {
+                                await pc.addIceCandidate(new RTCIceCandidate({
+                                    candidate: msg.candidate,
+                                    sdpMid: msg.sdpMid,
+                                    sdpMLineIndex: msg.sdpMLineIndex
+                                }));
+
+                                console.log('[ICE] Remote candidate added');
+                            } else {
+                                // 远端 candidate 收集结束
+                                await pc.addIceCandidate(null);
+                                console.log('[ICE] Remote end-of-candidates received');
+                            }
+                        }
+
+                        // ===== 可选：后端发错误消息 =====
+                        else if (msg.type === 'error') {
+                            console.error('[WS] Server error:', msg.message);
+                            showMessage(msg.message || 'Server error', 'error');
+                            disconnect(false);
+                        }
+                    } catch (err) {
+                        console.error('[WS] Message handling error:', err);
+                    }
+                };
+
+                ws.onerror = (err) => {
+                    console.error('[WS] Error:', err);
+                    showMessage('WebSocket error', 'error');
+                    disconnect(false);
+                };
+
+                ws.onclose = (e) => {
+                    console.log('[WS] Closed, code:', e.code, 'reason:', e.reason);
+
+                    // 如果当前还在连接中/已连接，则视为异常关闭
+                    if (connected || connecting) {
+                        disconnect(false);
+                    }
+                };
+            } catch (err) {
+                console.error('[APP] Connection error:', err);
+                showMessage(err.message || 'Connection error', 'error');
+                setDisconnectedUI();
+            }
+        }
+
+        // =========================
+        // 断开连接
+        // 参数 manual = true 表示用户主动断开，不弹错误提示
+        // =========================
+        function disconnect(manual = true) {
+            console.log('[APP] Disconnecting... manual=', manual);
+
+            const currentWs = ws;
+            const currentPc = pc;
+
+            // 先置空，避免 onclose/onstatechange 递归触发时重复操作
+            ws = null;
+            pc = null;
+
+            try {
+                if (currentWs && currentWs.readyState === WebSocket.OPEN) {
+                    currentWs.close();
+                }
+            } catch (e) {
+                console.warn('[WS] close() error:', e);
+            }
+
+            try {
+                if (currentPc) {
+                    currentPc.close();
+                }
+            } catch (e) {
+                console.warn('[PC] close() error:', e);
+            }
+
+            setDisconnectedUI();
+
+            if (manual) {
+                showMessage('Disconnected', 'info');
+            }
+        }
+
+        // =========================
+        // 按钮事件：Connect / Disconnect
+        // =========================
         connectBtn.addEventListener('click', () => {
-            if (connected) {
-                disconnect();
+            if (connected || connecting) {
+                disconnect(true);
             } else {
                 connect();
             }
         });
 
+        // =========================
+        // 导航按钮
+        // 通过你的业务接口控制 browser_session 导航
+        // =========================
         navigateBtn.addEventListener('click', async () => {
-            const url = urlInput.value;
+            const url = urlInput.value?.trim();
             if (!url) return;
 
             try {
                 const res = await fetch(`/browse?session=${sessionId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'navigate', url })
+                    body: JSON.stringify({
+                        action: 'navigate',
+                        url
+                    })
                 });
+
                 if (res.ok) {
                     showMessage('Navigating...', 'success');
+                } else {
+                    showMessage(`Navigate failed (${res.status})`, 'error');
                 }
             } catch (err) {
-                showMessage(err.message, 'error');
+                console.error('[NAV] Error:', err);
+                showMessage(err.message || 'Navigate error', 'error');
             }
         });
 
+        // =========================
+        // Screenshot 按钮
+        // 保留你原有业务逻辑
+        // =========================
         screenshotBtn.addEventListener('click', async () => {
             try {
                 const res = await fetch(`/browse?session=${sessionId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'create' })
+                    body: JSON.stringify({
+                        action: 'create'
+                    })
                 });
+
                 if (res.ok) {
                     showMessage('Screenshot session created', 'success');
+                } else {
+                    showMessage(`Screenshot failed (${res.status})`, 'error');
                 }
             } catch (err) {
-                showMessage(err.message, 'error');
+                console.error('[SHOT] Error:', err);
+                showMessage(err.message || 'Screenshot error', 'error');
             }
         });
     </script>
+
     <script src="/js/input-handler.js"></script>
+
     <script>
+        // =========================
+        // 输入控制模块
+        // 你原来这里有个隐藏问题：
+        // InputHandler.init('#viewport', '#cursor')
+        // 但 HTML 里没有 id="viewport"
+        // 上面我已经给 viewport 容器补了 id
+        // =========================
         const inputHandler = new InputHandler(sessionId);
         inputHandler.init('#viewport', '#cursor');
 
@@ -376,10 +640,15 @@
                 showMessage('Please connect first', 'error');
                 return;
             }
+
             controlEnabled = inputHandler.toggle();
             controlBtn.classList.toggle('active', controlEnabled);
             controlBtn.textContent = controlEnabled ? 'Exit Control' : 'Control Mode';
-            showMessage(controlEnabled ? 'Control mode enabled' : 'Control mode disabled', 'success');
+
+            showMessage(
+                controlEnabled ? 'Control mode enabled' : 'Control mode disabled',
+                'success'
+            );
         });
     </script>
 </body>
