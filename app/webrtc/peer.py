@@ -2,7 +2,9 @@ import asyncio
 import logging
 import io
 from typing import Optional
-
+from collections import deque
+from PIL import Image
+import numpy as np
 import av
 from aiohttp import web
 from aiortc import (
@@ -24,19 +26,23 @@ class BrowserVideoTrack(VideoStreamTrack):
     """
     自定义视频轨道：
     - 从 browser_session 持续抓取截图帧（bytes）
-    - 用 PyAV 解码图片
+    - 用 Pillow 解码图片为 ndarray
     - 转成 aiortc 可发送的 VideoFrame
+    - 维护帧 buffer 实现跳帧机制
     """
 
     def __init__(self, browser_session: BrowserSession):
         super().__init__()
         self.browser_session = browser_session
         self.frame_count = 0
+        self._frame_queue = deque(maxlen=2)
+        self._last_capture_time = 0
 
     async def recv(self):
         """
         aiortc 会持续调用 recv() 拉取下一帧。
-        这里使用"循环等待"而不是递归，避免长时间无帧时递归堆积。
+        - 跳帧机制：如果处理落后，只发送最新帧
+        - 用 Pillow 解码 JPEG，避免 PyAV 容器开销
         """
         target_interval = 1.0 / Config.STREAM_FPS
 
@@ -57,14 +63,16 @@ class BrowserVideoTrack(VideoStreamTrack):
                 continue
 
             try:
-                # 用 PyAV 从图片 bytes 解码成视频帧
-                with av.open(io.BytesIO(frame_data)) as container:
-                    # 直接取第一帧（图片通常只有一帧）
-                    frame = next(container.decode(video=0))
-                    frame_nd = frame.to_ndarray(format="bgr24")
+                img = Image.open(io.BytesIO(frame_data))
+                frame_nd = np.array(img.convert("RGB"))
 
-                # 转成 aiortc 可发送的 VideoFrame
-                video_frame = av.VideoFrame.from_ndarray(frame_nd, format="bgr24")
+                self._frame_queue.append(frame_nd)
+
+                if len(self._frame_queue) > 1:
+                    frame_nd = self._frame_queue[-1]
+                    self._frame_queue.clear()
+
+                video_frame = av.VideoFrame.from_ndarray(frame_nd, format="rgb24")
                 video_frame.pts = pts
                 video_frame.time_base = time_base
 

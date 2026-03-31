@@ -7,7 +7,7 @@ def _load_ini_config():
     ini_path = Path(__file__).parent.parent / "config.ini"
     parser = ConfigParser()
     if ini_path.exists():
-        parser.read(ini_path)
+        parser.read(ini_path, encoding='utf-8')
         return parser
     return None
 
