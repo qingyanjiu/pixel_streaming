@@ -177,14 +177,14 @@ class Config:
     HOST = "0.0.0.0"      # 服务监听地址
     PORT = 8080            # 服务端口
 
-    # ICE 服务器配置
+    # ICE 服务器配置（urls 必须是数组格式）
     ICE_SERVERS = [
-        {"urls": "stun:stun.l.google.com:19302"},
+        {"urls": ["stun:stun.l.google.com:19302"]},
     ]
 
     # TURN 配置（外网部署时使用）
     # TURN_SERVER = "服务器IP"
-    # TURN_PORT = 8888  # UE5 coturn 默认端口是 8888
+    # TURN_PORT = 19303  # coturn 默认端口是 19303
     # TURN_USER = "用户名"
     # TURN_PASSWORD = "密码"
 ```
@@ -245,10 +245,11 @@ python -c "from app.config import Config; print(Config.get_ice_servers())"
 ### 前端配置 (`web/public/index.html`)
 
 ```javascript
+// 注意：urls 必须是数组格式！
 const iceServers = [
-    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: ['stun:stun.l.google.com:19302'] },
     // 外网部署时添加 TURN：
-    // { urls: 'turn:你的服务器IP:3478?transport=udp' }
+    // { urls: ['turn:你的服务器IP:19303?transport=udp'], username: 'admin', credential: 'hxkj2026' }
 ];
 ```
 
@@ -261,51 +262,112 @@ const iceServers = [
 | 外网服务器 + 内网客户端 | STUN + TURN |
 | 外网服务器 + 外网客户端 | STUN + TURN |
 
+### 使用 coturn TURN 服务器
+
+本项目使用 coturn 作为 TURN 服务器。配置文件位于 `PixelStreamingInfrastructure/SignallingWebServer/turnserver.conf`。
+
+#### coturn 安装
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install coturn
+```
+
+**CentOS/RHEL:**
+```bash
+sudo yum install coturn
+```
+
+**macOS:**
+```bash
+brew install coturn
+```
+
+#### 启动 coturn
+
+**方式一：使用项目配置文件**
+
+```bash
+# 复制配置文件到系统目录
+sudo cp PixelStreamingInfrastructure/SignallingWebServer/turnserver.conf /etc/coturn/turnserver.conf
+
+# 启动 coturn
+sudo systemctl enable coturn
+sudo systemctl start coturn
+
+# 查看状态
+sudo systemctl status coturn
+```
+
+**方式二：命令行启动（调试模式）**
+
+```bash
+sudo turnserver -c PixelStreamingInfrastructure/SignallingWebServer/turnserver.conf -v -v -v -f
+```
+
+#### 配置文件说明
+
+`turnserver.conf` 配置项详解：
+
+| 配置项 | 说明 | 示例值 |
+|--------|------|--------|
+| `realm` | TURN 服务器领域名称，用于认证 | `PixelStreaming` |
+| `fingerprint` | 在 STUN/TURN 响应中添加指纹 | （无需值） |
+| `listening-port` | UDP 监听端口 | `19303` |
+| `listening-ip` | 监听 IP地址 | `0.0.0.0` |
+| `relay-ip` | 中继 IP地址（分配给客户端的公网地址） | `107.173.83.242` |
+| `external-ip` | 外部/公网 IP | `107.173.83.242` |
+| `user` | 长期凭证认证的用户名和密码 | `admin:hxkj2026` |
+| `tls-listening-port` | TLS 监听端口 | `5349` |
+| `lt-cred-mech` | 启用长期凭证认证机制 | （无需值） |
+| `min-port` | 中继端口范围起始 | `49152` |
+| `max-port` | 中继端口范围结束 | `65535` |
+| `no-loopback-peers` | 禁止回环地址作为对等端 | （无需值） |
+| `no-self-check` | 禁用自身检查 | （无需值） |
+| `verbose` | 详细日志输出 | （无需值） |
+
+#### 关键配置说明
+
+1. **`lt-cred-mech`** - 长期凭证认证，客户端需要提供 username 和 password
+2. **`relay-ip`** - TURN 服务器分配给客户端的中继地址，必须是公网可达的 IP
+3. **`external-ip`** - 服务器的公网 IP，某些云环境需要显式指定
+4. **端口范围** - `min-port` 到 `max-port` 之间的端口用于 TURN 中继连接
+
+#### 防火墙配置
+
+确保云服务器安全组/防火墙开放以下端口：
+
+| 协议 | 端口范围 | 说明 |
+|------|----------|------|
+| UDP | `listening-port` (19303) | coturn 监听端口 |
+| UDP | `min-port` - `max-port` (49152-65535) | TURN 中继端口 |
+
+**Ubuntu/Debian (ufw):**
+```bash
+sudo ufw allow 19303/udp
+sudo ufw allow 49152:65535/udp
+```
+
+**云服务器：** 在云控制台的安全组规则中添加上述 UDP 端口。
+
 ### 使用 UE5 TURN 服务
 
-UE5 内置 coturn TURN 服务器，默认端口 **8888**，无认证：
+UE5 内置 coturn TURN 服务器，默认端口 **19303**，：
 
 ```bash
 # .env 配置
-TURN_SERVER=你的UE5服务器IP
-TURN_PORT=8888
-# 无需用户名密码（UE5 coturn 默认配置）
-```
+模仿.env.example 修改 .env
 
-```python
-# 或直接修改 app/config.py
-TURN_SERVER = "你的UE5服务器IP"
-TURN_PORT = 8888
-```
+将 PixelStreamingInfrastructure/目录下内容拷到服务器
+修改
+SignallingWebServer/turnserver.conf
+参考 项目根目录的 turnserver.conf
 
-## API
+执行 
+bash SignallingWebServer/platform_scripts/bash/Start_TURNServer.sh
+他会自动安装依赖
 
-### WebSocket `/ws?session=<id>`
-
-WebRTC 信令通道，用于视频流传输。
-
-### REST API `/browse?session=<id>`
-
-```bash
-# 创建会话
-curl -X POST "/browse?session=test" \
-  -H "Content-Type: application/json" \
-  -d '{"action":"create"}'
-
-# 导航到 URL
-curl -X POST "/browse?session=test" \
-  -H "Content-Type: application/json" \
-  -d '{"action":"navigate","url":"https://example.com"}'
-
-# 执行 JavaScript
-curl -X POST "/browse?session=test" \
-  -H "Content-Type: application/json" \
-  -d '{"action":"evaluate","script":"document.title"}'
-
-# 关闭会话
-curl -X POST "/browse?session=test" \
-  -H "Content-Type: application/json" \
-  -d '{"action":"close"}'
 ```
 
 ## 项目结构
@@ -330,31 +392,6 @@ browser-stream/
 └── run.py
 ```
 
-## Docker 部署
-
-Linux 服务器推荐使用 Docker 部署（使用 host 网络，WebRTC 可正常工作）。
-
-### 快速部署
-
-```bash
-# 克隆项目
-git clone <repo-url>
-cd pixel-streaming
-
-# 配置 TURN（如需要）
-cp .env.example .env
-nano .env  # 编辑 TURN_SERVER 等配置
-
-# 启动服务
-docker compose up -d
-
-# 查看日志
-docker compose logs -f
-
-# 停止服务
-docker compose down
-```
-
 ### 环境变量配置
 
 | 变量 | 说明 | 默认值 |
@@ -370,10 +407,7 @@ docker compose down
 
 ```bash
 # .env 配置
-TURN_SERVER=你的UE5服务器IP
-TURN_PORT=8888
+TURN_SERVER=服务器IP
+TURN_PORT=19303
 ```
 
-### macOS/Windows 本地开发
-
-Docker Desktop 的虚拟网络会导致 WebRTC ICE 连接失败。本地开发请**直接在宿主机运行 Python**。
