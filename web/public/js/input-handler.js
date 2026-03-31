@@ -114,9 +114,11 @@ class InputHandler {
 
     getViewportCoordinates(clientX, clientY) {
         const rect = this.viewport.getBoundingClientRect();
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
         return {
-            x: Math.round(clientX - rect.left),
-            y: Math.round(clientY - rect.top)
+            x: parseFloat((x / rect.width).toFixed(6)),
+            y: parseFloat((y / rect.height).toFixed(6))
         };
     }
 

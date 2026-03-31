@@ -171,6 +171,10 @@
                 <div class="cursor-circle"></div>
                 <div class="cursor-crosshair"></div>
             </div>
+
+            <div class="remote-cursor" id="remoteCursor">
+                <div class="remote-cursor-pointer"></div>
+            </div>
         </div>
     </main>
 
@@ -274,6 +278,7 @@
             // - 外网环境建议保留 UDP + TCP
             // - 你已经验证过 TURN 是通的
             const iceServers = [
+                { urls: 'stun:stun.l.google.com:19302' },
                 {
                     urls: [
                         'turn:107.173.83.242:19303?transport=udp',
@@ -630,7 +635,7 @@
         // 上面我已经给 viewport 容器补了 id
         // =========================
         const inputHandler = new InputHandler(sessionId);
-        inputHandler.init('#viewport', '#cursor');
+        inputHandler.init('#viewport', '#cursor', '#remoteCursor');
 
         const controlBtn = document.getElementById('controlBtn');
         let controlEnabled = false;

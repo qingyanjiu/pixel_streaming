@@ -13,6 +13,8 @@ class BrowserSession:
     browser: Optional[Browser] = None
     page: Optional[Page] = None
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    viewport_width: int = 1920
+    viewport_height: int = 1080
 
     async def start(self):
         if self.browser:
@@ -23,8 +25,19 @@ class BrowserSession:
             headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"]
         )
         self.page = await self.browser.new_page()
-        await self.page.set_viewport_size({"width": 1920, "height": 1080})
-        logger.info(f"Session {self.id}: Browser started")
+        await self.page.set_viewport_size(
+            {"width": self.viewport_width, "height": self.viewport_height}
+        )
+        logger.info(
+            f"Session {self.id}: Browser started with viewport {self.viewport_width}x{self.viewport_height}"
+        )
+
+    async def set_viewport_size(self, width: int, height: int):
+        self.viewport_width = width
+        self.viewport_height = height
+        if self.page:
+            await self.page.set_viewport_size({"width": width, "height": height})
+        logger.info(f"Session {self.id}: Viewport set to {width}x{height}")
 
     async def navigate(self, url: str):
         if not self.page:
@@ -65,17 +78,17 @@ class BrowserSession:
             raise RuntimeError("Browser not started")
         await self.page.mouse.click(x, y, button=button, click_count=click_count)
 
-    async def mouse_down(self, x: float, y: float, button: str = "left"):
+    async def mouse_down(self, button: str = "left"):
         if not self.page:
             raise RuntimeError("Browser not started")
-        await self.page.mouse.down(x, y, button=button)
+        await self.page.mouse.down(button=button)
 
-    async def mouse_up(self, x: float, y: float, button: str = "left"):
+    async def mouse_up(self, button: str = "left"):
         if not self.page:
             raise RuntimeError("Browser not started")
-        await self.page.mouse.up(x, y, button=button)
+        await self.page.mouse.up(button=button)
 
-    async def mouse_wheel(self, x: float, y: float, delta_x: int = 0, delta_y: int = 0):
+    async def mouse_wheel(self, delta_x: int = 0, delta_y: int = 0):
         if not self.page:
             raise RuntimeError("Browser not started")
         await self.page.mouse.wheel(delta_x, delta_y)

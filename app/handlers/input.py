@@ -5,6 +5,9 @@ from app.browser.manager import browser_manager
 
 logger = logging.getLogger(__name__)
 
+REMOTE_VIEWPORT_WIDTH = 1920
+REMOTE_VIEWPORT_HEIGHT = 1080
+
 
 async def input_handler(request: web.Request) -> web.WebSocketResponse:
     ws = web.WebSocketResponse()
@@ -18,6 +21,8 @@ async def input_handler(request: web.Request) -> web.WebSocketResponse:
     if not session.page:
         await session.start()
 
+    await session.set_viewport_size(REMOTE_VIEWPORT_WIDTH, REMOTE_VIEWPORT_HEIGHT)
+
     try:
         async for msg in ws:
             if msg.type == web.WSMsgType.TEXT:
@@ -27,26 +32,27 @@ async def input_handler(request: web.Request) -> web.WebSocketResponse:
 
                     if event_type == "mouse":
                         action = data.get("action")
-                        x = data.get("x", 0)
-                        y = data.get("y", 0)
+                        ratio_x = data.get("x", 0)
+                        ratio_y = data.get("y", 0)
+                        x = ratio_x * REMOTE_VIEWPORT_WIDTH
+                        y = ratio_y * REMOTE_VIEWPORT_HEIGHT
+                        button = data.get("button", "left")
 
                         if action == "move":
                             await session.mouse_move(x, y)
                         elif action == "click":
-                            button = data.get("button", "left")
                             await session.mouse_click(x, y, button=button)
                         elif action == "dblclick":
                             await session.mouse_click(x, y, click_count=2)
                         elif action == "down":
-                            button = data.get("button", "left")
-                            await session.mouse_down(x, y, button=button)
+                            await session.mouse_move(x, y)
+                            await session.mouse_down(button=button)
                         elif action == "up":
-                            button = data.get("button", "left")
-                            await session.mouse_up(x, y, button=button)
+                            await session.mouse_up(button=button)
                         elif action == "wheel":
                             delta_x = data.get("deltaX", 0)
                             delta_y = data.get("deltaY", 0)
-                            await session.mouse_wheel(x, y, delta_x, delta_y)
+                            await session.mouse_wheel(delta_x, delta_y)
 
                     elif event_type == "keyboard":
                         action = data.get("action")
