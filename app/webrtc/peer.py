@@ -14,6 +14,7 @@ from aiortc import (
 )
 from aiortc.sdp import candidate_from_sdp
 
+from app.browser.manager import BrowserSession
 from app.config import Config
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ class BrowserVideoTrack(VideoStreamTrack):
     - 转成 aiortc 可发送的 VideoFrame
     """
 
-    def __init__(self, browser_session):
+    def __init__(self, browser_session: BrowserSession):
         super().__init__()
         self.browser_session = browser_session
         self.frame_count = 0
@@ -35,20 +36,24 @@ class BrowserVideoTrack(VideoStreamTrack):
     async def recv(self):
         """
         aiortc 会持续调用 recv() 拉取下一帧。
-        这里使用“循环等待”而不是递归，避免长时间无帧时递归堆积。
+        这里使用"循环等待"而不是递归，避免长时间无帧时递归堆积。
         """
+        target_interval = 1.0 / Config.STREAM_FPS
+
         while True:
             # 为当前帧生成时间戳
             pts, time_base = await self.next_timestamp()
 
             logger.debug(f"[VideoTrack] recv() called, frame_count={self.frame_count}")
 
-            # 从你的 browser_session 获取截图 bytes（通常是 PNG/JPEG）
-            frame_data = await self.browser_session.capture_frame()
+            # 从 browser_session 获取截图 bytes
+            frame_data = await self.browser_session.capture_frame(
+                quality=Config.SCREENSHOT_QUALITY
+            )
 
             # 如果当前没拿到图，稍等再继续，不要递归调用自己
             if frame_data is None:
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(target_interval)
                 continue
 
             try:
@@ -68,7 +73,7 @@ class BrowserVideoTrack(VideoStreamTrack):
 
             except Exception as e:
                 logger.exception(f"[VideoTrack] Frame decode error: {e}")
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(target_interval)
 
 
 class WebRTCPeer:
@@ -111,8 +116,7 @@ class WebRTCPeer:
         # ]
         ice_servers = [
             RTCIceServer(
-                urls=s["urls"],
-                **({k: v for k, v in s.items() if k != "urls"})
+                urls=s["urls"], **({k: v for k, v in s.items() if k != "urls"})
             )
             for s in Config.get_ice_servers()
         ]
@@ -232,10 +236,12 @@ class WebRTCPeer:
             f"[{self.session_id}] Sending final answer, SDP length={len(final_answer_sdp)}"
         )
 
-        await self.ws.send_json({
-            "type": "answer",
-            "sdp": final_answer_sdp,
-        })
+        await self.ws.send_json(
+            {
+                "type": "answer",
+                "sdp": final_answer_sdp,
+            }
+        )
 
     async def handle_ice_candidate(self, data: dict):
         """
@@ -244,7 +250,9 @@ class WebRTCPeer:
         - candidate = null：表示浏览器 candidate 收集结束，传 None 给 aiortc
         """
         if not self.pc:
-            logger.warning(f"[{self.session_id}] handle_ice_candidate called before pc init")
+            logger.warning(
+                f"[{self.session_id}] handle_ice_candidate called before pc init"
+            )
             return
 
         candidate_str = data.get("candidate")

@@ -170,97 +170,66 @@ python run.py
 
 ## 配置
 
-### 服务端配置 (`app/config.py`)
+所有配置通过 `config.ini` 文件管理，无需使用环境变量。
 
-```python
-class Config:
-    HOST = "0.0.0.0"      # 服务监听地址
-    PORT = 8080            # 服务端口
+### 配置文件 (`config.ini`)
 
-    # ICE 服务器配置（urls 必须是数组格式）
-    ICE_SERVERS = [
-        {"urls": ["stun:stun.l.google.com:19302"]},
-    ]
+```ini
+[server]
+host = 0.0.0.0          # 监听所有网络接口
+port = 8080              # HTTP 服务端口
 
-    # TURN 配置（外网部署时使用）
-    # TURN_SERVER = "服务器IP"
-    # TURN_PORT = 19303  # coturn 默认端口是 19303
-    # TURN_USER = "用户名"
-    # TURN_PASSWORD = "密码"
+[settings]
+viewport_width = 1920    # 远程浏览器视口宽度
+viewport_height = 1080    # 远程浏览器视口高度
+screenshot_quality = 80   # 截图质量 1-100
+
+[turn]
+server =                 # TURN 服务器 IP (留空则不使用)
+port = 19303            # TURN 端口
+user =                   # TURN 用户名
+password =               # TURN 密码
 ```
 
-### 环境变量配置
+### 配置项说明
 
-#### 1. 创建 `.env` 文件
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `server.host` | 服务监听地址 | `0.0.0.0` |
+| `server.port` | 服务端口 | `8080` |
+| `settings.viewport_width` | 远程浏览器视口宽度 | `1920` |
+| `settings.viewport_height` | 远程浏览器视口高度 | `1080` |
+| `settings.screenshot_quality` | 截图 JPEG 质量 | `80` |
+| `turn.server` | TURN 服务器 IP | （空） |
+| `turn.port` | TURN 端口 | `19303` |
+| `turn.user` | TURN 用户名 | （空） |
+| `turn.password` | TURN 密码 | （空） |
 
-```bash
-# 复制示例配置
-cp .env.example .env
-```
-
-#### 2. 编辑 `.env` 文件
-
-```bash
-# 服务端口（默认 8080）
-PORT=8080
-
-# TURN 配置（外网部署时取消注释）
-# TURN 服务器地址
-TURN_SERVER=你的服务器IP
-# UE5 coturn 默认端口是 8888
-TURN_PORT=8888
-# 如果 TURN 需要认证，取消下面两行注释
-# TURN_USER=用户名
-# TURN_PASSWORD=密码
-```
-
-#### 3. 启动应用
+### 启动应用
 
 ```bash
 python run.py
 ```
 
-程序会自动加载 `.env` 文件中的环境变量。
+程序会自动加载 `config.ini` 中的配置。
 
-#### 配置项说明
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `HOST` | 服务监听地址 | `0.0.0.0` |
-| `PORT` | 服务端口 | `8080` |
-| `TURN_SERVER` | TURN 服务器 IP/域名 | （空，不使用 TURN） |
-| `TURN_PORT` | TURN 服务器端口 | `8888` |
-| `TURN_USER` | TURN 用户名（可选） | （空） |
-| `TURN_PASSWORD` | TURN 密码（可选） | （空） |
-
-#### 4. 验证配置
+### 验证配置
 
 ```bash
-# 查看加载的配置
 python -c "from app.config import Config; print(Config.get_ice_servers())"
 ```
 
-如果配置正确，会输出 ICE 服务器列表。
-
 ### 前端配置 (`web/public/index.html`)
 
-```javascript
-// 注意：urls 必须是数组格式！
-const iceServers = [
-    { urls: ['stun:stun.l.google.com:19302'] },
-    // 外网部署时添加 TURN：
-    // { urls: ['turn:你的服务器IP:19303?transport=udp'], username: 'admin', credential: 'hxkj2026' }
-];
-```
+前端会自动使用服务端的 TURN 配置，无需手动配置。
 
 ### 部署场景
 
-| 场景 | ICE 配置 |
-|------|---------|
-| 本机测试 | 仅 STUN |
-| 内网互联 | 仅 STUN |
-| 外网服务器 + 内网客户端 | STUN + TURN |
-| 外网服务器 + 外网客户端 | STUN + TURN |
+| 场景 | 配置 |
+|------|------|
+| 本机测试 | 不配置 `[turn]` |
+| 内网互联 | 不配置 `[turn]` |
+| 外网部署 | 填写 `[turn]` 配置 |
 
 ### 使用 coturn TURN 服务器
 
@@ -353,61 +322,37 @@ sudo ufw allow 49152:65535/udp
 
 ### 使用 UE5 TURN 服务
 
-UE5 内置 coturn TURN 服务器，默认端口 **19303**，：
+UE5 内置 coturn TURN 服务器，默认端口 **19303**。
 
-```bash
-# .env 配置
-模仿.env.example 修改 .env
+参考上方 coturn 配置章节启动 TURN 服务后，在 `config.ini` 中填写：
 
-将 PixelStreamingInfrastructure/目录下内容拷到服务器
-修改
-SignallingWebServer/turnserver.conf
-参考 项目根目录的 turnserver.conf
-
-执行 
-bash SignallingWebServer/platform_scripts/bash/Start_TURNServer.sh
-他会自动安装依赖
-
+```ini
+[turn]
+server = 服务器IP
+port = 19303
+user = your_username
+password = your_password
 ```
 
 ## 项目结构
 
 ```
-browser-stream/
+pixel_streaming/
 ├── app/
 │   ├── __init__.py
-│   ├── config.py         # 配置文件
-│   ├── main.py           # 服务器入口
+│   ├── config.py          # 配置加载模块
+│   ├── main.py            # 服务器入口
 │   ├── browser/          # 浏览器管理
 │   │   └── manager.py
-│   ├── handlers/         # HTTP/WebSocket 处理器
+│   ├── handlers/          # HTTP/WebSocket 处理器
 │   │   ├── http.py
+│   │   ├── input.py
 │   │   └── websocket.py
-│   └── webrtc/           # WebRTC 端连接
+│   └── webrtc/            # WebRTC 端连接
 │       └── peer.py
 ├── web/
-│   └── public/           # 前端文件
-├── .env.example           # 环境变量示例
+│   └── public/            # 前端文件
+├── config.ini              # 配置文件 (所有配置项)
 ├── requirements.txt
 └── run.py
-```
-
-### 环境变量配置
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `TURN_SERVER` | TURN 服务器 IP | （空） |
-| `TURN_PORT` | TURN 端口 | `8888` |
-| `TURN_USER` | TURN 用户名（可选） | （空） |
-| `TURN_PASSWORD` | TURN 密码（可选） | （空） |
-
-### 云服务器 + UE5
-
-外网部署时使用 UE5 自带的 TURN 服务：
-
-```bash
-# .env 配置
-TURN_SERVER=服务器IP
-TURN_PORT=19303
-```
 

@@ -34,9 +34,10 @@ class InputHandler {
         };
     }
 
-    init(viewportSelector, cursorSelector) {
+    init(viewportSelector, cursorSelector, videoSelector) {
         this.viewport = document.querySelector(viewportSelector);
         this.cursor = document.querySelector(cursorSelector);
+        this.video = document.querySelector(videoSelector);
 
         if (!this.viewport || !this.cursor) {
             console.error('InputHandler: viewport or cursor element not found');
@@ -113,17 +114,17 @@ class InputHandler {
     }
 
     getViewportCoordinates(clientX, clientY) {
-        const rect = this.viewport.getBoundingClientRect();
+        const rect = this.video.getBoundingClientRect();
         const x = clientX - rect.left;
         const y = clientY - rect.top;
         return {
-            x: parseFloat((x / rect.width).toFixed(6)),
-            y: parseFloat((y / rect.height).toFixed(6))
+            x: Math.round(x),
+            y: Math.round(y)
         };
     }
 
     updateCursor(clientX, clientY) {
-        const rect = this.viewport.getBoundingClientRect();
+        const rect = this.video.getBoundingClientRect();
         this.cursor.style.left = `${clientX - rect.left}px`;
         this.cursor.style.top = `${clientY - rect.top}px`;
     }

@@ -3,6 +3,7 @@ import logging
 from typing import Optional
 from dataclasses import dataclass, field
 from playwright.async_api import async_playwright, Browser, Page
+from app.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -13,8 +14,8 @@ class BrowserSession:
     browser: Optional[Browser] = None
     page: Optional[Page] = None
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    viewport_width: int = 1920
-    viewport_height: int = 1080
+    viewport_width: int = Config.VIEWPORT_WIDTH
+    viewport_height: int = Config.VIEWPORT_HEIGHT
 
     async def start(self):
         if self.browser:
@@ -22,7 +23,17 @@ class BrowserSession:
 
         playwright = await async_playwright().start()
         self.browser = await playwright.chromium.launch(
-            headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"]
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--enable-gpu",
+                "--use-gl=angle",
+                "--ignore-gpu-blocklist",
+                "--enable-webgl",
+                "--disable-frame-rate-limit",
+                "--disable-gpu-sandbox",
+            ],
         )
         self.page = await self.browser.new_page()
         await self.page.set_viewport_size(
@@ -39,22 +50,29 @@ class BrowserSession:
             await self.page.set_viewport_size({"width": width, "height": height})
         logger.info(f"Session {self.id}: Viewport set to {width}x{height}")
 
-    async def navigate(self, url: str):
+    async def navigate(self, url: str, timeout: float = 60.0):
         if not self.page:
             raise RuntimeError("Browser not started")
-        await self.page.goto(url, wait_until="networkidle")
-        logger.info(f"Session {self.id}: Navigated to {url}")
+        try:
+            await self.page.goto(
+                url, wait_until="domcontentloaded", timeout=timeout * 1000
+            )
+            logger.info(f"Session {self.id}: Navigated to {url}")
+        except Exception as e:
+            logger.warning(
+                f"Session {self.id}: Navigation timeout, continuing anyway: {e}"
+            )
 
     async def evaluate(self, script: str):
         if not self.page:
             raise RuntimeError("Browser not started")
         return await self.page.evaluate(script)
 
-    async def capture_frame(self) -> Optional[bytes]:
+    async def capture_frame(self, quality: int = 80) -> Optional[bytes]:
         if not self.page:
             return None
         try:
-            return await self.page.screenshot(type="jpeg", quality=80)
+            return await self.page.screenshot(type="jpeg", quality=quality)
         except Exception as e:
             logger.error(f"Session {self.id}: Capture error: {e}")
             return None

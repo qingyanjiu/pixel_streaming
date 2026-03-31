@@ -2,11 +2,9 @@ import json
 import logging
 from aiohttp import web
 from app.browser.manager import browser_manager
+from app.config import Config
 
 logger = logging.getLogger(__name__)
-
-REMOTE_VIEWPORT_WIDTH = 1920
-REMOTE_VIEWPORT_HEIGHT = 1080
 
 
 async def input_handler(request: web.Request) -> web.WebSocketResponse:
@@ -21,7 +19,7 @@ async def input_handler(request: web.Request) -> web.WebSocketResponse:
     if not session.page:
         await session.start()
 
-    await session.set_viewport_size(REMOTE_VIEWPORT_WIDTH, REMOTE_VIEWPORT_HEIGHT)
+    await session.set_viewport_size(Config.VIEWPORT_WIDTH, Config.VIEWPORT_HEIGHT)
 
     try:
         async for msg in ws:
@@ -32,10 +30,8 @@ async def input_handler(request: web.Request) -> web.WebSocketResponse:
 
                     if event_type == "mouse":
                         action = data.get("action")
-                        ratio_x = data.get("x", 0)
-                        ratio_y = data.get("y", 0)
-                        x = ratio_x * REMOTE_VIEWPORT_WIDTH
-                        y = ratio_y * REMOTE_VIEWPORT_HEIGHT
+                        x = data.get("x", 0)
+                        y = data.get("y", 0)
                         button = data.get("button", "left")
 
                         if action == "move":

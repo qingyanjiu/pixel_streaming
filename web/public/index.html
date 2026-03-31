@@ -608,12 +608,19 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        action: 'create'
+                        action: 'screenshot'
                     })
                 });
 
                 if (res.ok) {
-                    showMessage('Screenshot session created', 'success');
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `screenshot-${Date.now()}.jpg`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showMessage('Screenshot saved', 'success');
                 } else {
                     showMessage(`Screenshot failed (${res.status})`, 'error');
                 }
@@ -635,7 +642,7 @@
         // 上面我已经给 viewport 容器补了 id
         // =========================
         const inputHandler = new InputHandler(sessionId);
-        inputHandler.init('#viewport', '#cursor', '#remoteCursor');
+        inputHandler.init('#viewport', '#cursor', '#video');
 
         const controlBtn = document.getElementById('controlBtn');
         let controlEnabled = false;
