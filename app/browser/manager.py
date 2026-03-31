@@ -14,8 +14,8 @@ class BrowserSession:
     browser: Optional[Browser] = None
     page: Optional[Page] = None
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    viewport_width: int = Config.VIEWPORT_WIDTH
-    viewport_height: int = Config.VIEWPORT_HEIGHT
+    viewport_width: int = 1920
+    viewport_height: int = 1080
 
     async def start(self):
         if self.browser:

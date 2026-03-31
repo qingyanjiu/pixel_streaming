@@ -236,12 +236,10 @@ class WebRTCPeer:
             f"[{self.session_id}] Sending final answer, SDP length={len(final_answer_sdp)}"
         )
 
-        await self.ws.send_json(
-            {
-                "type": "answer",
-                "sdp": final_answer_sdp,
-            }
-        )
+        await self.ws.send_json({
+            "type": "answer",
+            "sdp": final_answer_sdp,
+        })
 
     async def handle_ice_candidate(self, data: dict):
         """
@@ -250,9 +248,7 @@ class WebRTCPeer:
         - candidate = null：表示浏览器 candidate 收集结束，传 None 给 aiortc
         """
         if not self.pc:
-            logger.warning(
-                f"[{self.session_id}] handle_ice_candidate called before pc init"
-            )
+            logger.warning(f"[{self.session_id}] handle_ice_candidate called before pc init")
             return
 
         candidate_str = data.get("candidate")
