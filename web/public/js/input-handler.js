@@ -46,7 +46,6 @@ class InputHandler {
         this.viewport.addEventListener('mousemove', this.onMouseMove.bind(this));
         this.viewport.addEventListener('mousedown', this.onMouseDown.bind(this));
         this.viewport.addEventListener('mouseup', this.onMouseUp.bind(this));
-        this.viewport.addEventListener('click', this.onClick.bind(this));
         this.viewport.addEventListener('dblclick', this.onDblClick.bind(this));
         this.viewport.addEventListener('wheel', this.onWheel.bind(this), { passive: false });
 
@@ -169,22 +168,6 @@ class InputHandler {
         this.send({
             type: 'mouse',
             action: 'up',
-            x: coords.x,
-            y: coords.y,
-            button: button
-        });
-    }
-
-    onClick(e) {
-        if (!this.enabled) return;
-        e.preventDefault();
-
-        const coords = this.getViewportCoordinates(e.clientX, e.clientY);
-        const button = this.BUTTON_MAP[e.button] || 'left';
-
-        this.send({
-            type: 'mouse',
-            action: 'click',
             x: coords.x,
             y: coords.y,
             button: button

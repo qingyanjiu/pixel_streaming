@@ -50,6 +50,7 @@ async def input_handler(request: web.Request) -> web.WebSocketResponse:
                             await session.mouse_down(button=button)
                         elif action == "up":
                             await session.mouse_up(button=button)
+                            await session.mouse_click(x, y, button=button)
                         elif action == "wheel":
                             delta_x = data.get("deltaX", 0)
                             delta_y = data.get("deltaY", 0)
